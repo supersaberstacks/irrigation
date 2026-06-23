@@ -1,5 +1,7 @@
 # Irrigation Designer
 
+**▶ [Live demo](https://supersaberstacks.github.io/irrigation/)**
+
 A browser-based tool for designing a backyard irrigation layout and checking
 whether it will actually work — before you dig. Draw your yard, lay pipe from a
 bore (pump), drop in sprinkler heads, then run a hydraulic simulation that tells
