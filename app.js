@@ -267,8 +267,8 @@
     // areas (garden beds / sheds) sit behind pipes & heads
     for (const s of S.shapes) drawShape(s);
 
-    // throw arcs only after a successful simulation (a bore + heads present)
-    if (S.sim && S.sim.ok) for (const n of S.nodes) if (n.type === 'sprinkler') drawThrow(n);
+    // throw arcs only while in simulate mode
+    if (S.sim) for (const n of S.nodes) if (n.type === 'sprinkler') drawThrow(n);
 
     // pipes
     for (const p of S.pipes) drawPipe(p);
@@ -300,8 +300,6 @@
       ctx.strokeStyle = '#4dabf7'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, Math.PI * 2); ctx.stroke();
     }
-
-    updateSimStatus(); // keep the top-bar status & Stop button in sync
   }
 
   function drawShape(s) {
@@ -931,25 +929,6 @@
   function simulateNow() {
     S.sim = null; runSim(); S.tab = 'results'; renderSide(); draw();
   }
-  function stopSimulation() {
-    if (!S.sim) return;
-    S.sim = null; renderSide(); draw();
-  }
-  // Reflect whether a simulation result is currently active in the top bar.
-  // Only touches the DOM when the on/off state actually flips.
-  let _simStateShown = null;
-  function updateSimStatus() {
-    const on = !!(S.sim && S.sim.ok);
-    if (on === _simStateShown) return;
-    _simStateShown = on;
-    const badge = document.getElementById('simStatus');
-    const stop = document.getElementById('stopBtn');
-    if (badge) {
-      badge.textContent = on ? '● Simulation running' : '○ Simulation stopped';
-      badge.classList.toggle('on', on);
-    }
-    if (stop) stop.disabled = !on;
-  }
 
   // ---------- persistence ----------
   const KEY = 'irrigationDesign_v1';
@@ -1002,7 +981,6 @@
   document.getElementById('yw').addEventListener('input', e => { S.yard.w = Math.max(1, +e.target.value); fitView(); draw(); save(); });
   document.getElementById('yh').addEventListener('input', e => { S.yard.h = Math.max(1, +e.target.value); fitView(); draw(); save(); });
   document.getElementById('simBtn').addEventListener('click', simulateNow);
-  document.getElementById('stopBtn').addEventListener('click', stopSimulation);
   document.getElementById('fitBtn').addEventListener('click', () => { fitView(); draw(); });
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
