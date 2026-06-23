@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backyard Irrigation Designer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ===== Top bar ===== -->
+  <div class="topbar">
+    <h1>Irrigation Designer</h1>
+    <div class="field">Yard
+      <input id="yw" type="number" min="1" value="15" title="Width (m)"> ×
+      <input id="yh" type="number" min="1" value="20" title="Height (m)"> m
+    </div>
+    <div class="field">Pipe
+      <select id="pipeSize" title="Size to draw with">
+        <option value="40">40 mm</option>
+        <option value="30" selected>30 mm</option>
+        <option value="20">20 mm</option>
+      </select>
+    </div>
+    <button id="fitBtn" title="Fit yard to view">Fit</button>
+    <div class="spacer"></div>
+    <button id="importBtn">Import</button>
+    <input id="importFile" type="file" accept="application/json" style="display:none">
+    <button id="exportBtn">Export</button>
+    <button id="clearBtn">Clear</button>
+    <button id="simBtn" class="primary">▶ Simulate</button>
+  </div>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <!-- tool rail -->
+    <div class="tools">
+      <button class="tool" data-tool="select"><span class="ic">🖱</span>Select</button>
+      <button class="tool" data-tool="pan"><span class="ic">✋︎</span>Pan</button>
+      <div class="tool-sep"></div>
+      <button class="tool" data-tool="pipe"><span class="ic">━</span>Pipe</button>
+      <button class="tool" data-tool="bore"><span class="ic">■</span>Bore</button>
+      <button class="tool" data-tool="rect" title="Draw a garden bed / shed / zone"><span class="ic">▭</span>Area</button>
+      <div class="tool-sep"></div>
+      <button class="tool" data-tool="spr360"><span class="ic">◉</span>360°</button>
+      <button class="tool" data-tool="spr180"><span class="ic">◐</span>180°</button>
+      <button class="tool" data-tool="spr90"><span class="ic">◔</span>90°</button>
+      <div class="tool-sep"></div>
+      <button class="tool" data-tool="erase"><span class="ic">⌫</span>Erase</button>
+    </div>
+
+    <!-- canvas -->
+    <div class="canvas-wrap">
+      <canvas id="cv"></canvas>
+      <div class="hint">Pipe: click point-to-point (Esc / right-click to stop). Area: drag to draw a bed or shed. Wheel = zoom, Shift/right-drag = pan. Delete removes selected.</div>
+      <div class="coords" id="coords"></div>
+    </div>
+
+    <!-- side panel -->
+    <div class="side">
+      <div class="tabs">
+        <button class="tab active" data-tab="inspector">Inspect</button>
+        <button class="tab" data-tab="results">Results</button>
+        <button class="tab" data-tab="parts">Parts</button>
+        <button class="tab" data-tab="settings">Settings</button>
+      </div>
+      <div class="panel-body" id="panelBody"></div>
+    </div>
+  </div>
+
+  <script src="sim.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
