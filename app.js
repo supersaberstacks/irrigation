@@ -267,8 +267,8 @@
     // areas (garden beds / sheds) sit behind pipes & heads
     for (const s of S.shapes) drawShape(s);
 
-    // throw arcs only while in simulate mode
-    if (S.sim) for (const n of S.nodes) if (n.type === 'sprinkler') drawThrow(n);
+    // throw arcs only after a successful simulation (needs a bore + heads)
+    if (S.sim && S.sim.ok) for (const n of S.nodes) if (n.type === 'sprinkler') drawThrow(n);
 
     // pipes
     for (const p of S.pipes) drawPipe(p);
