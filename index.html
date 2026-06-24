@@ -26,6 +26,7 @@
     <button id="importBtn">Import</button>
     <input id="importFile" type="file" accept="application/json" style="display:none">
     <button id="exportBtn">Export</button>
+    <button id="printBtn" title="Print a black & white, ink-saving plan">🖨 Print</button>
     <button id="clearBtn">Clear</button>
     <button id="simBtn" class="primary">▶ Simulate</button>
   </div>
@@ -66,6 +67,9 @@
       <div class="panel-body" id="panelBody"></div>
     </div>
   </div>
+
+  <!-- ===== Print-only plan (hidden on screen, built on demand) ===== -->
+  <div id="printRoot"></div>
 
   <script src="sim.js"></script>
   <script src="app.js"></script>

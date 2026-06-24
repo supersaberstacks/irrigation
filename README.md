@@ -28,6 +28,9 @@ Open `index.html` in any modern browser. That's it.
 4. **Add sprinklers** — `◉` 360°, `◐` 180°, `◔` 90°. Rotate a head with its aim handle.
 5. **Draw areas** (`▭` tool) — garden beds, sheds, paving, etc. (visual only).
 6. **▶ Simulate** — solves the network and colours each head by how well it's supplied.
+7. **🖨 Print** — produces a clean, black-and-white plan (layout drawing + parts list
+   + results) that prints legibly on a mono printer and uses minimal ink — no dark
+   backgrounds, no filled areas or coverage arcs, just line work and labels.
 
 Navigation: mouse wheel = zoom, right-drag / Shift-drag = pan, **Fit** recentres,
 `Delete` removes the selection.

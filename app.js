@@ -967,6 +967,142 @@
     fr.readAsText(file);
   }
 
+  // ---------- print-friendly plan ----------
+  // Renders the layout to an offscreen canvas as black line-art on white:
+  // no filled areas, no filled coverage arcs, no dark backgrounds — only
+  // strokes and labels, so a B&W printer uses minimal ink.
+  function buildPlanImage() {
+    const pad = 0.8;                                  // metres of margin around the yard
+    const wM = S.yard.w + pad * 2, hM = S.yard.h + pad * 2;
+    const pscale = Math.min(1800 / Math.max(wM, hM), 140); // px per metre, capped
+    const cw = Math.round(wM * pscale), ch = Math.round(hM * pscale);
+    const pc = document.createElement('canvas');
+    pc.width = cw; pc.height = ch;
+    const g = pc.getContext('2d');
+    const pox = pad * pscale, poy = pad * pscale;
+    const ts = (x, y) => ({ x: x * pscale + pox, y: y * pscale + poy });
+    const fs = f => Math.max(8, pscale * f) + 'px system-ui';
+    const simOk = S.sim && S.sim.ok;
+
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch);
+    g.lineJoin = 'round'; g.lineCap = 'round';
+
+    // 1 m grid (light) + axis labels — minor grid is dropped to save ink
+    g.strokeStyle = '#cfcfcf'; g.lineWidth = 0.8;
+    g.beginPath();
+    for (let x = 0; x <= S.yard.w + 1e-6; x += 1) { const a = ts(x, 0), b = ts(x, S.yard.h); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); }
+    for (let y = 0; y <= S.yard.h + 1e-6; y += 1) { const a = ts(0, y), b = ts(S.yard.w, y); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); }
+    g.stroke();
+    const o = ts(0, 0), e = ts(S.yard.w, S.yard.h);
+    g.fillStyle = '#777'; g.font = fs(0.15); g.textAlign = 'left'; g.textBaseline = 'top';
+    for (let x = 0; x <= S.yard.w + 1e-6; x += 1) { const p = ts(x, 0); g.fillText(x + 'm', p.x + 2, o.y + 2); }
+    for (let y = 1; y <= S.yard.h + 1e-6; y += 1) { const p = ts(0, y); g.fillText(y + 'm', o.x + 2, p.y + 2); }
+    g.strokeStyle = '#333'; g.lineWidth = 1.5; g.strokeRect(o.x, o.y, e.x - o.x, e.y - o.y);
+
+    // areas / beds — outline + label only
+    for (const s of S.shapes) {
+      const a = ts(s.x, s.y), w = s.w * pscale, h = s.h * pscale;
+      g.strokeStyle = '#555'; g.lineWidth = 1; g.setLineDash([6, 4]);
+      g.strokeRect(a.x, a.y, w, h); g.setLineDash([]);
+      if (s.label) {
+        g.fillStyle = '#000'; g.font = 'bold ' + fs(0.16);
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(s.label, a.x + w / 2, a.y + h / 2);
+      }
+    }
+
+    // spray coverage — dashed outline only (no fill)
+    for (const n of S.nodes) {
+      if (n.type !== 'sprinkler') continue;
+      const spec = SIM.SPRINKLER[n.sub] || SIM.SPRINKLER['360'];
+      const r = (simOk ? effectiveThrow(n) : spec.radius) * pscale;
+      if (r < 2) continue;
+      const c = ts(n.x, n.y);
+      const rot = (n.rot || 0) * Math.PI / 180, half = (spec.arc * Math.PI / 180) / 2;
+      g.strokeStyle = '#999'; g.lineWidth = 0.8; g.setLineDash([4, 3]);
+      g.beginPath();
+      if (spec.arc >= 360) g.arc(c.x, c.y, r, 0, Math.PI * 2);
+      else { g.moveTo(c.x, c.y); g.arc(c.x, c.y, r, rot - half, rot + half); g.closePath(); }
+      g.stroke(); g.setLineDash([]);
+    }
+
+    // pipes + size/flow labels (white halo keeps them readable over the grid)
+    for (const p of S.pipes) {
+      const a = nodeById(p.a), b = nodeById(p.b); if (!a || !b) continue;
+      const sa = ts(a.x, a.y), sb = ts(b.x, b.y);
+      g.strokeStyle = '#000'; g.lineWidth = Math.max(1, (p.size / 1000) * 1.6 * pscale);
+      g.beginPath(); g.moveTo(sa.x, sa.y); g.lineTo(sb.x, sb.y); g.stroke();
+      let lbl = p.size + 'mm';
+      if (simOk && S.sim.pipes[p.id]) lbl += '  ' + S.sim.pipes[p.id].flow.toFixed(1) + ' L/min';
+      const mx = (sa.x + sb.x) / 2, ly = (sa.y + sb.y) / 2 - Math.max(7, pscale * 0.13);
+      g.font = fs(0.13); g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = Math.max(2, pscale * 0.04); g.strokeStyle = '#fff'; g.strokeText(lbl, mx, ly);
+      g.fillStyle = '#333'; g.fillText(lbl, mx, ly);
+    }
+
+    // nodes
+    for (const n of S.nodes) drawPrintNode(g, ts, fs, n);
+
+    return pc.toDataURL('image/png');
+  }
+
+  function drawPrintNode(g, ts, fs, n) {
+    const c = ts(n.x, n.y);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (n.type === 'bore') {
+      const r = Math.max(7, parseFloat(fs(0.16)) * 0.95);
+      g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.6;
+      g.beginPath(); g.rect(c.x - r, c.y - r, r * 2, r * 2); g.fill(); g.stroke();
+      g.fillStyle = '#000'; g.font = 'bold ' + fs(0.2); g.fillText('B', c.x, c.y + 0.5);
+    } else if (n.type === 'sprinkler') {
+      const r = Math.max(5, parseFloat(fs(0.12)) * 0.95);
+      g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.4;
+      g.beginPath(); g.arc(c.x, c.y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = '#000'; g.font = 'bold ' + fs(0.11);
+      g.fillText(n.sub === '360' ? '360' : n.sub, c.x, c.y + 0.5);
+      const sd = S.sim && S.sim.sprinklers[n.id];
+      if (sd) {
+        const txt = sd.flow.toFixed(1) + ' L/min', ly = c.y + r + Math.max(8, parseFloat(fs(0.13)));
+        g.font = fs(0.12);
+        g.lineWidth = 3; g.strokeStyle = '#fff'; g.strokeText(txt, c.x, ly);
+        g.fillStyle = '#000'; g.fillText(txt, c.x, ly);
+      }
+    } else {
+      const deg = degree(n.id);
+      if (deg === 0) return;                            // unused points add nothing to a plan
+      const r = deg >= 3 ? Math.max(3, parseFloat(fs(0.05))) : Math.max(2, parseFloat(fs(0.035)));
+      g.fillStyle = '#000'; g.beginPath(); g.arc(c.x, c.y, r, 0, Math.PI * 2); g.fill();
+    }
+  }
+
+  function printPlan() {
+    runSim();                                           // ensure flow labels/coverage reflect the design
+    const img = buildPlanImage();
+    const date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const root = document.getElementById('printRoot');
+    root.innerHTML = `
+      <div class="print-head">
+        <h1>Irrigation Plan</h1>
+        <div class="print-meta">Yard ${S.yard.w} &times; ${S.yard.h} m &nbsp;&middot;&nbsp; ${date}</div>
+      </div>
+      <img class="print-plan" src="${img}" alt="Irrigation layout">
+      <div class="print-legend">
+        <span><b>&#9633; B</b> Bore / pump</span>
+        <span>&#9711; Sprinkler (label = type)</span>
+        <span>&#8212; Pipe (label = size / flow)</span>
+        <span>&#9645; Area / bed (dashed)</span>
+        <span>&#8978; Spray coverage (dashed)</span>
+      </div>
+      <div class="print-cols">
+        <div class="print-block">${renderBOM()}</div>
+        <div class="print-block"><h3>Results</h3>${renderResults()}</div>
+      </div>
+      <div class="print-foot">Generated with Backyard Irrigation Designer</div>`;
+    const im = root.querySelector('.print-plan');
+    if (im.complete && im.naturalWidth) window.print();
+    else { im.onload = () => window.print(); im.onerror = () => window.print(); }
+  }
+
   // ---------- toolbar wiring ----------
   function setTool(t) {
     S.tool = t; S.pipeStart = null; rectDraft = null;
@@ -983,6 +1119,7 @@
   document.getElementById('simBtn').addEventListener('click', simulateNow);
   document.getElementById('fitBtn').addEventListener('click', () => { fitView(); draw(); });
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
+  document.getElementById('printBtn').addEventListener('click', printPlan);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', e => { if (e.target.files[0]) importJSON(e.target.files[0]); });
   document.getElementById('clearBtn').addEventListener('click', () => {
