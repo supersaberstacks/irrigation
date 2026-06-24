@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backyard Irrigation Designer</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
   <!-- ===== Top bar ===== -->
@@ -71,7 +71,9 @@
   <!-- ===== Print-only plan (hidden on screen, built on demand) ===== -->
   <div id="printRoot"></div>
 
-  <script src="sim.js"></script>
-  <script src="app.js"></script>
+  <!-- bump ?v= whenever sim.js/app.js/styles.css change, so browsers fetch
+       the new file instead of a stale cached copy (GitHub Pages caches assets). -->
+  <script src="sim.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
