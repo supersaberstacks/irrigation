@@ -21,6 +21,7 @@
   // Sprinkler catalogue: rated flow (L/min) and throw radius (m).
   const SPRINKLER = {
     '360': { flow: 9.4, radius: 3.6, arc: 360, label: 'Spray head 360°' },
+    '270': { flow: 7.5, radius: 3.6, arc: 270, label: 'Spray head 270°' },
     '180': { flow: 5.6, radius: 3.6, arc: 180, label: 'Spray head 180°' },
     '90':  { flow: 3.0, radius: 3.6, arc: 90,  label: 'Spray head 90°'  },
   };
@@ -83,6 +84,9 @@
     while (queue.length) {
       const u = queue.shift();
       order.push(u);
+      // A closed valve is reached, but flow stops here: don't traverse past it,
+      // so everything only reachable through it is left unsupplied.
+      if (byId[u].type === 'valve' && byId[u].closed) continue;
       for (const e of adj[u]) {
         if (!visited[e.to]) {
           visited[e.to] = true;
@@ -98,7 +102,7 @@
     if (loopEdges.size) warnings.push(loopEdges.size + ' loop(s) detected — simulated as a tree (redundant pipe ignored for flow).');
 
     const disconnected = sprinklers.filter(s => !visited[s.id]);
-    if (disconnected.length) warnings.push(disconnected.length + ' sprinkler(s) not connected to the bore — they receive no water.');
+    if (disconnected.length) warnings.push(disconnected.length + ' sprinkler(s) not reached from the bore (disconnected or behind a closed valve) — they receive no water.');
 
     // ---- emitter constants ----
     const ratedHead = params.ratedP * 1000 / (RHO * G); // m

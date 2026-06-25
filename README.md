@@ -25,10 +25,15 @@ Open `index.html` in any modern browser. That's it.
    its horsepower and depth (how far it has to lift water).
 3. **Draw pipe** (`━` tool) — click point-to-point. Click on an existing pipe to
    tee into it; `Esc` or right-click ends a run. Choose 40/30/20 mm in the top bar.
-4. **Add sprinklers** — `◉` 360°, `◐` 180°, `◔` 90°. Rotate a head with its aim handle.
-5. **Draw areas** (`▭` tool) — garden beds, sheds, paving, etc. (visual only).
-6. **▶ Simulate** — solves the network and colours each head by how well it's supplied.
-7. **🖨 Print** — produces a clean, black-and-white plan (layout drawing + parts list
+4. **Add sprinklers** — `◉` 360°, `◕` 270°, `◐` 180°, `◔` 90°. Rotate a directional head with its aim handle.
+5. **Add valves** (`⋈` tool) — an inline valve you can set **Open** or **Closed** in the inspector.
+   A closed valve stops flow to everything downstream of it, so you can model zones / shut-offs.
+6. **Add blockers** (`⊘` tool) — a capped head position. It marks where a sprinkler *could* go
+   without spraying anything; switch its **Type** in the inspector to fit a real head later
+   (or cap an existing head off the same way).
+7. **Draw areas** (`▭` tool) — garden beds, sheds, paving, etc. (visual only).
+8. **▶ Simulate** — solves the network and colours each head by how well it's supplied.
+9. **🖨 Print** — produces a clean, black-and-white plan (layout drawing + parts list
    + results) that prints legibly on a mono printer and uses minimal ink — no dark
    backgrounds, no filled areas or coverage arcs, just line work and labels.
 
@@ -89,8 +94,11 @@ reused independently of the editor.
 }
 ```
 
-Coordinates are in metres. The same object is what gets auto-saved to
-`localStorage`.
+Coordinates are in metres. A node's `type` is one of `bore`, `sprinkler`,
+`junction`, `valve`, or `blocker`. Sprinklers carry a `sub` (`"360"` / `"270"` /
+`"180"` / `"90"`) and a `rot` (facing, degrees); valves carry `closed`
+(`true`/`false`); blockers carry no extra fields. The same object is what gets
+auto-saved to `localStorage`.
 
 ## Notes & limitations
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backyard Irrigation Designer</title>
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <!-- ===== Top bar ===== -->
@@ -43,8 +43,12 @@
       <button class="tool" data-tool="rect" title="Draw a garden bed / shed / zone"><span class="ic">▭</span>Area</button>
       <div class="tool-sep"></div>
       <button class="tool" data-tool="spr360"><span class="ic">◉</span>360°</button>
+      <button class="tool" data-tool="spr270"><span class="ic">◕</span>270°</button>
       <button class="tool" data-tool="spr180"><span class="ic">◐</span>180°</button>
       <button class="tool" data-tool="spr90"><span class="ic">◔</span>90°</button>
+      <div class="tool-sep"></div>
+      <button class="tool" data-tool="valve" title="Inline valve — open or closed"><span class="ic">⋈</span>Valve</button>
+      <button class="tool" data-tool="blocker" title="Cap a head spot — fit a sprinkler here later"><span class="ic">⊘</span>Blocker</button>
       <div class="tool-sep"></div>
       <button class="tool" data-tool="erase"><span class="ic">⌫</span>Erase</button>
     </div>
@@ -73,7 +77,7 @@
 
   <!-- bump ?v= whenever sim.js/app.js/styles.css change, so browsers fetch
        the new file instead of a stale cached copy (GitHub Pages caches assets). -->
-  <script src="sim.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+  <script src="sim.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

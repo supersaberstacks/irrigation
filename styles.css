@@ -72,6 +72,7 @@ button.primary:hover { opacity: 0.9; }
   align-items: center;
   gap: 6px;
   padding: 8px 0;
+  overflow-y: auto;
 }
 .tool {
   width: 42px; height: 42px;
