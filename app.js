@@ -10,7 +10,7 @@
 
   const S = {
     yard: { w: 15, h: 20 },
-    nodes: [],   // {id,x,y,type:'bore'|'sprinkler'|'junction', sub, rot, hp, depth}
+    nodes: [],   // {id,x,y,type:'bore'|'sprinkler'|'junction'|'valve'|'blocker', sub, rot, hp, depth, closed}
     pipes: [],   // {id,a,b,size}
     shapes: [],  // {id,x,y,w,h,label,color} — garden beds / sheds / zones
     params: { eff: 0.5, ratedP: 200, hazenC: 150 },
@@ -195,6 +195,7 @@
     n.type = type;
     if (type === 'sprinkler') { n.sub = sub; if (n.rot == null) n.rot = 0; }
     if (type === 'bore') { if (n.hp == null) n.hp = 2.5; if (n.depth == null) n.depth = 6; }
+    if (type === 'valve') { if (n.closed == null) n.closed = false; }
     S.selected = { kind: 'node', id: n.id };
     S.sim = null;
   }
@@ -468,6 +469,19 @@
         ctx.fillStyle = '#cdd9e3'; ctx.font = '9px system-ui';
         ctx.fillText(S.sim.sprinklers[n.id].flow.toFixed(1) + ' L/min', c.x, c.y + 16);
       }
+    } else if (n.type === 'valve') {
+      const dirs = pipeDirs(n.id);
+      const ang = dirs.length ? dirs[0].ang : 0;
+      drawValveSymbol(c, ang, 9, n.closed ? '#e03131' : '#2f9e44', !!n.closed);
+    } else if (n.type === 'blocker') {
+      // hollow grey ring with an X — a capped riser / placeholder head
+      ctx.strokeStyle = '#8b98a5'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(c.x, c.y, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(c.x - 3.2, c.y - 3.2); ctx.lineTo(c.x + 3.2, c.y + 3.2);
+      ctx.moveTo(c.x + 3.2, c.y - 3.2); ctx.lineTo(c.x - 3.2, c.y + 3.2);
+      ctx.stroke();
     } else {
       const deg = degree(n.id);
       ctx.fillStyle = '#90a2b4';
@@ -490,6 +504,32 @@
       }
     }
     ctx.textAlign = 'left';
+  }
+
+  // Bowtie valve glyph centred on `c`, long axis along `ang` (the pipe run).
+  // Green = open, red = closed; a perpendicular bar marks a shut valve.
+  function drawValveSymbol(c, ang, size, fill, closed) {
+    const ux = Math.cos(ang), uy = Math.sin(ang);
+    const px = -uy, py = ux;
+    const L = size, W = size * 0.72;
+    ctx.fillStyle = fill; ctx.strokeStyle = '#0b1118'; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(c.x + ux * L + px * W, c.y + uy * L + py * W);
+    ctx.lineTo(c.x + ux * L - px * W, c.y + uy * L - py * W);
+    ctx.closePath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(c.x - ux * L + px * W, c.y - uy * L + py * W);
+    ctx.lineTo(c.x - ux * L - px * W, c.y - uy * L - py * W);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    if (closed) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(c.x + px * (W + 2), c.y + py * (W + 2));
+      ctx.lineTo(c.x - px * (W + 2), c.y - py * (W + 2));
+      ctx.stroke();
+    }
   }
 
   // ---------- interaction ----------
@@ -593,6 +633,8 @@
 
     if (S.tool === 'bore') { placeComponent(world, 'bore'); }
     else if (S.tool.startsWith('spr')) { placeComponent(world, 'sprinkler', S.tool.slice(3)); }
+    else if (S.tool === 'valve') { placeComponent(world, 'valve'); }
+    else if (S.tool === 'blocker') { placeComponent(world, 'blocker'); }
     else if (S.tool === 'erase') { eraseAt(world, hitThresh); }
     renderSide(); draw();
   });
@@ -784,15 +826,29 @@
         <div class="kv"><span>Position</span><span>${n.x.toFixed(1)}, ${n.y.toFixed(1)} m</span></div>
         <button class="danger-btn" data-act="del">Delete bore</button>`;
     }
-    if (n.type === 'sprinkler') {
+    if (n.type === 'sprinkler' || n.type === 'blocker') {
+      const isBlocker = n.type === 'blocker';
+      // One Type selector covers both: a blocker is just a head spot with no
+      // spray yet, so you can drop a head in (or cap one off) from here.
+      const typeSelect = `
+        <div class="prop"><label>Type</label>
+          <select data-act="sub">
+            <option value="blocker" ${isBlocker ? 'selected' : ''}>Blocker (capped)</option>
+            ${['360', '270', '180', '90'].map(s => `<option value="${s}" ${(!isBlocker && s == n.sub) ? 'selected' : ''}>${SIM.SPRINKLER[s].label}</option>`).join('')}
+          </select></div>`;
+      if (isBlocker) {
+        return `
+          <h3>Blocker</h3>
+          ${typeSelect}
+          <p class="empty" style="margin-top:4px">Marks a spot where a head could go, capped for now — no spray. Switch the Type above to fit a sprinkler here later.</p>
+          <div class="kv"><span>Position</span><span>${n.x.toFixed(1)}, ${n.y.toFixed(1)} m</span></div>
+          <button class="danger-btn" data-act="del">Delete blocker</button>`;
+      }
       const spec = SIM.SPRINKLER[n.sub];
       const sim = S.sim && S.sim.sprinklers[n.id];
       return `
         <h3>Sprinkler</h3>
-        <div class="prop"><label>Type</label>
-          <select data-act="sub">
-            ${['360', '180', '90'].map(s => `<option value="${s}" ${s == n.sub ? 'selected' : ''}>${SIM.SPRINKLER[s].label}</option>`).join('')}
-          </select></div>
+        ${typeSelect}
         ${n.sub !== '360' ? `<div class="prop"><label>Facing (°): ${n.rot || 0}</label>
           <input type="range" min="0" max="355" step="5" value="${n.rot || 0}" data-act="rot">
           <p class="empty" style="margin:4px 0 0">Tip: drag the yellow ↻ handle on the head to aim the spray. 0°=east, 90°=south.</p></div>` : ''}
@@ -802,6 +858,21 @@
                  <div class="kv"><span>Pressure</span><span>${sim.pressure.toFixed(0)} kPa</span></div>
                  <div class="kv"><span>Effective throw</span><span>${effectiveThrow(n).toFixed(1)} m</span></div>` : ''}
         <button class="danger-btn" data-act="del">Delete sprinkler</button>`;
+    }
+    if (n.type === 'valve') {
+      const closed = !!n.closed;
+      const stateBadge = closed ? '<span class="badge bad">CLOSED</span>' : '<span class="badge ok">OPEN</span>';
+      return `
+        <h3>Valve</h3>
+        <div class="prop"><label>Position</label>
+          <select data-act="valve">
+            <option value="open" ${closed ? '' : 'selected'}>Open — water flows</option>
+            <option value="closed" ${closed ? 'selected' : ''}>Closed — water blocked</option>
+          </select></div>
+        <div class="kv"><span>State</span><span>${stateBadge}</span></div>
+        <p class="empty" style="margin-top:4px">A closed valve stops flow to everything downstream of it. Re-run ▶ Simulate to see the effect.</p>
+        <div class="kv"><span>Position</span><span>${n.x.toFixed(1)}, ${n.y.toFixed(1)} m</span></div>
+        <button class="danger-btn" data-act="del">Delete valve</button>`;
     }
     // junction
     const fit = fittingFor(n);
@@ -825,7 +896,7 @@
     if (!r) return '<p class="empty">—</p>';
     let html = '';
     if (r.warnings.length) {
-      const err = r.warnings.some(w => /not connected|No bore|under-supplied/.test(w));
+      const err = r.warnings.some(w => /not reached|No bore|under-supplied/.test(w));
       html += `<div class="warnbox ${err ? 'err' : ''}"><b>Notes</b><ul>${r.warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>`;
     }
     if (!r.ok) return html || '<p class="empty">Add a bore and sprinklers, then results appear here.</p>';
@@ -845,7 +916,7 @@
   }
 
   function renderBOM() {
-    const sprCount = { '360': 0, '180': 0, '90': 0 };
+    const sprCount = { '360': 0, '270': 0, '180': 0, '90': 0 };
     S.nodes.filter(n => n.type === 'sprinkler').forEach(n => sprCount[n.sub]++);
     const pipeLen = { 40: 0, 30: 0, 20: 0 };
     S.pipes.forEach(p => { pipeLen[p.size] += dist(nodeById(p.a), nodeById(p.b)); });
@@ -861,6 +932,10 @@
     Object.entries(sprCount).forEach(([k, v]) => { if (v) { any = true; rows += `<tr><td>${SIM.SPRINKLER[k].label}</td><td>${v}</td></tr>`; } });
     Object.entries(pipeLen).forEach(([k, v]) => { if (v > 0.001) { any = true; rows += `<tr><td>${k} mm pipe</td><td>${v.toFixed(2)} m</td></tr>`; } });
     Object.entries(fits).forEach(([k, v]) => { any = true; rows += `<tr><td>${k}</td><td>${v}</td></tr>`; });
+    const valveCount = S.nodes.filter(n => n.type === 'valve').length;
+    if (valveCount) { any = true; rows += `<tr><td>Valve</td><td>${valveCount}</td></tr>`; }
+    const blockerCount = S.nodes.filter(n => n.type === 'blocker').length;
+    if (blockerCount) { any = true; rows += `<tr><td>Blocker / capped riser</td><td>${blockerCount}</td></tr>`; }
     const bore = S.nodes.find(n => n.type === 'bore');
     if (bore) { any = true; rows += `<tr><td>Bore pump (${bore.hp} HP, ${bore.depth} m)</td><td>1</td></tr>`; }
     if (!any) return '<p class="empty">Draw your layout to generate a parts list.</p>';
@@ -881,7 +956,7 @@
         <div><label>Width (m)</label><input type="number" min="1" value="${S.yard.w}" data-act="yw"></div>
         <div><label>Height (m)</label><input type="number" min="1" value="${S.yard.h}" data-act="yh"></div>
       </div>
-      <p class="empty">Grid is fixed at 0.1 m. Spray heads have a 3.6 m throw; flows are 9.4 / 5.6 / 3.0 L/min for 360 / 180 / 90°.</p>`;
+      <p class="empty">Grid is fixed at 0.1 m. Spray heads have a 3.6 m throw; flows are 9.4 / 7.5 / 5.6 / 3.0 L/min for 360 / 270 / 180 / 90°.</p>`;
   }
 
   function wireSide() {
@@ -898,7 +973,18 @@
           case 'pipeSize': if (p) p.size = +el.value; S.sim = null; break;
           case 'hp': if (n) n.hp = +el.value; S.sim = null; break;
           case 'depth': if (n) n.depth = +el.value; S.sim = null; break;
-          case 'sub': if (n) n.sub = el.value; S.sim = null; break;
+          case 'sub':
+            if (n) {
+              if (el.value === 'blocker') {
+                n.type = 'blocker';
+              } else {
+                n.type = 'sprinkler'; n.sub = el.value;
+                if (n.rot == null) n.rot = 0;
+              }
+              S.sim = null;
+            }
+            break;
+          case 'valve': if (n) { n.closed = el.value === 'closed'; S.sim = null; } break;
           case 'rot': if (n) n.rot = +el.value; break;
           case 'eff': S.params.eff = +el.value; S.sim = null; break;
           case 'ratedP': S.params.ratedP = +el.value; S.sim = null; break;
@@ -912,7 +998,7 @@
           case 'shapeH': if (s) s.h = Math.max(0.1, +el.value); break;
         }
         save();
-        if (act === 'del' || act === 'sub' || act === 'shapeColor') renderSide();
+        if (act === 'del' || act === 'sub' || act === 'valve' || act === 'shapeColor') renderSide();
         else if (act === 'rot') updateRotUI(n ? (n.rot || 0) : 0);
         else if (S.tab === 'results') renderSide();
         draw();
@@ -1067,6 +1153,31 @@
         g.lineWidth = 3; g.strokeStyle = '#fff'; g.strokeText(txt, c.x, ly);
         g.fillStyle = '#000'; g.fillText(txt, c.x, ly);
       }
+    } else if (n.type === 'valve') {
+      // bowtie aligned to the pipe; filled solid black when shut
+      const dirs = pipeDirs(n.id);
+      const ang = dirs.length ? dirs[0].ang : 0;
+      const L = Math.max(6, parseFloat(fs(0.14))), W = L * 0.72;
+      const ux = Math.cos(ang), uy = Math.sin(ang), px = -uy, py = ux;
+      g.strokeStyle = '#000'; g.lineWidth = 1.4; g.fillStyle = n.closed ? '#000' : '#fff';
+      g.beginPath();
+      g.moveTo(c.x, c.y); g.lineTo(c.x + ux * L + px * W, c.y + uy * L + py * W); g.lineTo(c.x + ux * L - px * W, c.y + uy * L - py * W); g.closePath();
+      g.moveTo(c.x, c.y); g.lineTo(c.x - ux * L + px * W, c.y - uy * L + py * W); g.lineTo(c.x - ux * L - px * W, c.y - uy * L - py * W); g.closePath();
+      g.fill(); g.stroke();
+      const lbl = n.closed ? 'V (shut)' : 'V', ly = c.y + L + Math.max(7, parseFloat(fs(0.12)));
+      g.font = fs(0.11);
+      g.lineWidth = 3; g.strokeStyle = '#fff'; g.strokeText(lbl, c.x, ly);
+      g.fillStyle = '#000'; g.fillText(lbl, c.x, ly);
+    } else if (n.type === 'blocker') {
+      // hollow ring with an X — a capped head position
+      const r = Math.max(5, parseFloat(fs(0.12)) * 0.95);
+      g.strokeStyle = '#000'; g.lineWidth = 1.4; g.fillStyle = '#fff';
+      g.beginPath(); g.arc(c.x, c.y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+      const k = r * 0.55;
+      g.beginPath();
+      g.moveTo(c.x - k, c.y - k); g.lineTo(c.x + k, c.y + k);
+      g.moveTo(c.x + k, c.y - k); g.lineTo(c.x - k, c.y + k);
+      g.stroke();
     } else {
       const deg = degree(n.id);
       if (deg === 0) return;                            // unused points add nothing to a plan
@@ -1089,6 +1200,8 @@
       <div class="print-legend">
         <span><b>&#9633; B</b> Bore / pump</span>
         <span>&#9711; Sprinkler (label = type)</span>
+        <span>&#8904; V Valve (filled = closed)</span>
+        <span>&#8856; Blocker (capped head spot)</span>
         <span>&#8212; Pipe (label = size / flow)</span>
         <span>&#9645; Area / bed (dashed)</span>
         <span>&#8978; Spray coverage (dashed)</span>
