@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backyard Irrigation Designer</title>
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <!-- ===== Top bar ===== -->
@@ -29,6 +29,7 @@
     <button id="printBtn" title="Print a black & white, ink-saving plan">🖨 Print</button>
     <button id="clearBtn">Clear</button>
     <button id="simBtn" class="primary">▶ Simulate</button>
+    <button id="stopBtn" class="danger" title="Clear simulation results and return to editing">■ Stop</button>
   </div>
 
   <!-- ===== Main ===== -->
@@ -77,7 +78,7 @@
 
   <!-- bump ?v= whenever sim.js/app.js/styles.css change, so browsers fetch
        the new file instead of a stale cached copy (GitHub Pages caches assets). -->
-  <script src="sim.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="sim.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
