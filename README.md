@@ -33,6 +33,7 @@ Open `index.html` in any modern browser. That's it.
    (or cap an existing head off the same way).
 7. **Draw areas** (`▭` tool) — garden beds, sheds, paving, etc. (visual only).
 8. **▶ Simulate** — solves the network and colours each head by how well it's supplied.
+   **■ Stop** clears the result overlays and returns to a plain design view.
 9. **🖨 Print** — produces a clean, black-and-white plan (layout drawing + parts list
    + results) that prints legibly on a mono printer and uses minimal ink — no dark
    backgrounds, no filled areas or coverage arcs, just line work and labels.

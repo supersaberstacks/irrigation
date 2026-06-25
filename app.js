@@ -22,6 +22,7 @@
     pipeStart: null,       // world point while drawing
     mouse: null,           // world point
     sim: null,
+    simActive: false,      // are simulation results currently being shown? (Simulate on / Stop off)
     tab: 'inspector',
   };
 
@@ -268,8 +269,8 @@
     // areas (garden beds / sheds) sit behind pipes & heads
     for (const s of S.shapes) drawShape(s);
 
-    // throw arcs only after a successful simulation (needs a bore + heads)
-    if (S.sim && S.sim.ok) for (const n of S.nodes) if (n.type === 'sprinkler') drawThrow(n);
+    // throw arcs only while a successful simulation is showing (needs a bore + heads)
+    if (S.simActive && S.sim && S.sim.ok) for (const n of S.nodes) if (n.type === 'sprinkler') drawThrow(n);
 
     // pipes
     for (const p of S.pipes) drawPipe(p);
@@ -428,9 +429,10 @@
     if (!a || !b) return;
     const sa = toScreen(a.x, a.y), sb = toScreen(b.x, b.y);
     const sel = S.selected && S.selected.kind === 'pipe' && S.selected.id === p.id;
+    const sim = S.simActive ? S.sim : null;
     let color = '#7d909f';
-    if (S.sim && S.sim.pipes[p.id]) {
-      const v = S.sim.pipes[p.id].velocity;
+    if (sim && sim.pipes[p.id]) {
+      const v = sim.pipes[p.id].velocity;
       color = v > 2.5 ? '#ff8787' : v > 1.5 ? '#e8a33d' : '#4dabf7';
     }
     if (sel) color = '#ffd43b';
@@ -444,7 +446,7 @@
     ctx.fillStyle = '#9fb1c1'; ctx.font = '9px system-ui';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
     let lbl = p.size + 'mm';
-    if (S.sim && S.sim.pipes[p.id]) lbl += '  ' + S.sim.pipes[p.id].flow.toFixed(1) + ' L/min';
+    if (sim && sim.pipes[p.id]) lbl += '  ' + sim.pipes[p.id].flow.toFixed(1) + ' L/min';
     ctx.fillText(lbl, mx, my - 8);
     ctx.textAlign = 'left';
   }
@@ -452,22 +454,23 @@
   function drawNode(n) {
     const c = toScreen(n.x, n.y);
     const sel = S.selected && S.selected.kind === 'node' && S.selected.id === n.id;
+    const sim = S.simActive ? S.sim : null;
     ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
     if (n.type === 'bore') {
       ctx.fillStyle = '#1971c2';
       ctx.beginPath(); ctx.rect(c.x - 9, c.y - 9, 18, 18); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.fillText('B', c.x, c.y + 0.5);
     } else if (n.type === 'sprinkler') {
-      const r = S.sim && S.sim.sprinklers[n.id]
-        ? ({ ok: '#2f9e44', low: '#e8a33d', bad: '#e03131' }[S.sim.sprinklers[n.id].status])
+      const r = sim && sim.sprinklers[n.id]
+        ? ({ ok: '#2f9e44', low: '#e8a33d', bad: '#e03131' }[sim.sprinklers[n.id].status])
         : '#2f9e44';
       ctx.fillStyle = r;
       ctx.beginPath(); ctx.arc(c.x, c.y, 6, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#0b1118'; ctx.font = 'bold 8px system-ui';
       ctx.fillText(n.sub === '360' ? '360' : n.sub, c.x, c.y + 0.5);
-      if (S.sim && S.sim.sprinklers[n.id]) {
+      if (sim && sim.sprinklers[n.id]) {
         ctx.fillStyle = '#cdd9e3'; ctx.font = '9px system-ui';
-        ctx.fillText(S.sim.sprinklers[n.id].flow.toFixed(1) + ' L/min', c.x, c.y + 16);
+        ctx.fillText(sim.sprinklers[n.id].flow.toFixed(1) + ' L/min', c.x, c.y + 16);
       }
     } else if (n.type === 'valve') {
       const dirs = pipeDirs(n.id);
@@ -781,7 +784,7 @@
       if (!p) return '<p class="empty">—</p>';
       const a = nodeById(p.a), b = nodeById(p.b);
       const len = dist(a, b);
-      const sim = S.sim && S.sim.pipes[p.id];
+      const sim = S.simActive && S.sim && S.sim.pipes[p.id];
       return `
         <h3>Pipe</h3>
         <div class="prop"><label>Diameter</label>
@@ -845,7 +848,7 @@
           <button class="danger-btn" data-act="del">Delete blocker</button>`;
       }
       const spec = SIM.SPRINKLER[n.sub];
-      const sim = S.sim && S.sim.sprinklers[n.id];
+      const sim = S.simActive && S.sim && S.sim.sprinklers[n.id];
       return `
         <h3>Sprinkler</h3>
         ${typeSelect}
@@ -890,10 +893,11 @@
     return `<span class="badge ${c}">${t}</span>`;
   }
 
-  function renderResults() {
-    runSim();
-    const r = S.sim;
-    if (!r) return '<p class="empty">—</p>';
+  function renderResults(force) {
+    const live = force || S.simActive;
+    if (live) runSim();
+    const r = live ? S.sim : null;
+    if (!r) return '<p class="empty">Press ▶ Simulate to solve the network and see per-head flows here. ■ Stop clears the results.</p>';
     let html = '';
     if (r.warnings.length) {
       const err = r.warnings.some(w => /not reached|No bore|under-supplied/.test(w));
@@ -1013,7 +1017,18 @@
     S.sim = SIM.simulate({ nodes: S.nodes, pipes: S.pipes, params: S.params });
   }
   function simulateNow() {
-    S.sim = null; runSim(); S.tab = 'results'; renderSide(); draw();
+    S.simActive = true; S.sim = null; runSim(); S.tab = 'results';
+    updateSimButtons(); renderSide(); draw();
+  }
+  // Clear the active simulation: drop the result overlays (arcs, flow colours
+  // & labels, per-head results) and return to a plain design view.
+  function stopSim() {
+    S.simActive = false; S.sim = null;
+    updateSimButtons(); renderSide(); draw();
+  }
+  function updateSimButtons() {
+    const stop = document.getElementById('stopBtn');
+    if (stop) stop.disabled = !S.simActive;
   }
 
   // ---------- persistence ----------
@@ -1047,7 +1062,7 @@
         S.yard = d.yard || S.yard; S.nodes = d.nodes || []; S.pipes = d.pipes || []; S.shapes = d.shapes || [];
         S.params = Object.assign(S.params, d.params || {});
         S.nextId = 1 + S.nodes.concat(S.pipes, S.shapes).reduce((m, x) => Math.max(m, +(String(x.id).replace('n', '')) || 0), 0);
-        S.sim = null; S.selected = null; fitView(); renderSide(); draw(); save();
+        S.sim = null; S.simActive = false; S.selected = null; updateSimButtons(); fitView(); renderSide(); draw(); save();
       } catch (e) { alert('Could not read that file.'); }
     };
     fr.readAsText(file);
@@ -1208,7 +1223,7 @@
       </div>
       <div class="print-cols">
         <div class="print-block">${renderBOM()}</div>
-        <div class="print-block"><h3>Results</h3>${renderResults()}</div>
+        <div class="print-block"><h3>Results</h3>${renderResults(true)}</div>
       </div>
       <div class="print-foot">Generated with Backyard Irrigation Designer</div>`;
     const im = root.querySelector('.print-plan');
@@ -1230,13 +1245,14 @@
   document.getElementById('yw').addEventListener('input', e => { S.yard.w = Math.max(1, +e.target.value); fitView(); draw(); save(); });
   document.getElementById('yh').addEventListener('input', e => { S.yard.h = Math.max(1, +e.target.value); fitView(); draw(); save(); });
   document.getElementById('simBtn').addEventListener('click', simulateNow);
+  document.getElementById('stopBtn').addEventListener('click', stopSim);
   document.getElementById('fitBtn').addEventListener('click', () => { fitView(); draw(); });
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
   document.getElementById('printBtn').addEventListener('click', printPlan);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', e => { if (e.target.files[0]) importJSON(e.target.files[0]); });
   document.getElementById('clearBtn').addEventListener('click', () => {
-    if (confirm('Clear the whole layout?')) { S.nodes = []; S.pipes = []; S.shapes = []; S.sim = null; S.selected = null; renderSide(); draw(); save(); }
+    if (confirm('Clear the whole layout?')) { S.nodes = []; S.pipes = []; S.shapes = []; S.sim = null; S.simActive = false; S.selected = null; updateSimButtons(); renderSide(); draw(); save(); }
   });
 
   // ---------- init ----------
@@ -1252,6 +1268,7 @@
     fitView();
     resize();
     setTool('select');
+    updateSimButtons();
     renderSide();
   }
   window.addEventListener('resize', resize);
