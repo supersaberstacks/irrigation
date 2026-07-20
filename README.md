@@ -43,7 +43,8 @@ Open `index.html` in any modern browser. That's it.
    backgrounds, no filled areas or coverage arcs, just line work and labels.
 
 Navigation: mouse wheel = zoom, right-drag / Shift-drag = pan, **Fit** recentres,
-`Delete` removes the selection.
+`Delete` removes the selection. **Undo/redo** the last change with the top-bar
+**↶ / ↷** buttons or `Ctrl+Z` / `Ctrl+Shift+Z` (`Ctrl+Y` also redoes).
 
 The side panel has four tabs:
 

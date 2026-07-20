@@ -553,6 +553,7 @@
   let rectDraft = null;      // {x0,y0,x1,y1} while dragging out a new area
   let shapeDrag = null;      // {id,gx,gy} moving an area
   let shapeResize = null;    // {id,fx,fy} resizing an area (fx,fy = fixed corner)
+  let dragBaseline = null;   // document snapshot taken when a drag begins (for undo)
 
   // Screen position of the aim handle at the edge of a sprinkler's spray.
   function aimHandlePos(n) {
@@ -572,6 +573,7 @@
     const sx = ev.clientX - rect.left, sy = ev.clientY - rect.top;
     const world = toWorld(sx, sy);
     const hitThresh = Math.max(GRID * 0.7, 10 / S.view.scale);
+    coalesceKey = null;        // touching the canvas ends any inspector edit burst
 
     // right-click cancels an in-progress pipe (same as Esc)
     if (ev.button === 2 && S.tool === 'pipe' && S.pipeStart) {
@@ -592,7 +594,7 @@
         const sn = nodeById(S.selected.id);
         if (sn && sn.type === 'sprinkler' && sn.sub !== '360') {
           const hp = aimHandlePos(sn);
-          if (Math.hypot(sx - hp.x, sy - hp.y) < 12) { rotating = { id: sn.id }; return; }
+          if (Math.hypot(sx - hp.x, sy - hp.y) < 12) { dragBaseline = docSnapshot(); rotating = { id: sn.id }; return; }
         }
       }
       // resize handle of the selected area
@@ -600,6 +602,7 @@
         const ss = shapeById(S.selected.id);
         const k = ss && shapeHandleAt(ss, sx, sy, 9);
         if (k) {
+          dragBaseline = docSnapshot();
           shapeResize = {
             id: ss.id,
             fx: k.includes('w') ? ss.x + ss.w : ss.x,
@@ -611,6 +614,7 @@
       const n = nodeAt(world, hitThresh);
       if (n) {
         S.selected = { kind: 'node', id: n.id };
+        dragBaseline = docSnapshot();
         dragging = { id: n.id };
         renderSide(); draw();
         return;
@@ -621,6 +625,7 @@
       const sh = shapeAt(world);
       if (sh) {
         S.selected = { kind: 'shape', id: sh.id };
+        dragBaseline = docSnapshot();
         shapeDrag = { id: sh.id, gx: world.x - sh.x, gy: world.y - sh.y };
         renderSide(); draw();
         return;
@@ -633,7 +638,7 @@
     if (S.tool === 'pipe') {
       const snapped = snapPt(world);
       if (!S.pipeStart) { S.pipeStart = snapped; }
-      else { addPipe(S.pipeStart, snapped); S.pipeStart = snapped; renderSide(); }
+      else { commit(() => addPipe(S.pipeStart, snapped)); S.pipeStart = snapped; renderSide(); }
       draw();
       return;
     }
@@ -645,11 +650,13 @@
       return;
     }
 
-    if (S.tool === 'bore') { placeComponent(world, 'bore'); }
-    else if (S.tool.startsWith('spr')) { placeComponent(world, 'sprinkler', S.tool.slice(3)); }
-    else if (S.tool === 'valve') { placeComponent(world, 'valve'); }
-    else if (S.tool === 'blocker') { placeComponent(world, 'blocker'); }
-    else if (S.tool === 'erase') { eraseAt(world, hitThresh); }
+    commit(() => {
+      if (S.tool === 'bore') placeComponent(world, 'bore');
+      else if (S.tool.startsWith('spr')) placeComponent(world, 'sprinkler', S.tool.slice(3));
+      else if (S.tool === 'valve') placeComponent(world, 'valve');
+      else if (S.tool === 'blocker') placeComponent(world, 'blocker');
+      else if (S.tool === 'erase') eraseAt(world, hitThresh);
+    });
     renderSide(); draw();
   });
 
@@ -731,9 +738,11 @@
       const w = Math.abs(rectDraft.x1 - rectDraft.x0), h = Math.abs(rectDraft.y1 - rectDraft.y0);
       rectDraft = null;
       if (w >= 0.2 && h >= 0.2) {
-        const s = { id: nid(), x: +x.toFixed(2), y: +y.toFixed(2), w: +w.toFixed(2), h: +h.toFixed(2), label: '', color: SHAPE_COLORS[0] };
-        S.shapes.push(s);
-        S.selected = { kind: 'shape', id: s.id };
+        commit(() => {
+          const s = { id: nid(), x: +x.toFixed(2), y: +y.toFixed(2), w: +w.toFixed(2), h: +h.toFixed(2), label: '', color: SHAPE_COLORS[0] };
+          S.shapes.push(s);
+          S.selected = { kind: 'shape', id: s.id };
+        });
       }
       renderSide(); draw(); save();
     }
@@ -746,6 +755,8 @@
       }
     }
     if (dragging || rotating || shapeDrag || shapeResize) { renderSide(); save(); }
+    // one undo step for the whole drag — only if it actually moved something
+    if (dragBaseline != null) { record(dragBaseline); dragBaseline = null; }
     dragging = null; panning = null; rotating = null; shapeDrag = null; shapeResize = null;
   });
   cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -764,8 +775,12 @@
   }, { passive: false });
 
   window.addEventListener('keydown', ev => {
+    const mod = ev.ctrlKey || ev.metaKey;
+    // Undo / redo work everywhere (even while a field is focused)
+    if (mod && (ev.key === 'z' || ev.key === 'Z')) { ev.preventDefault(); if (ev.shiftKey) redo(); else undo(); return; }
+    if (mod && (ev.key === 'y' || ev.key === 'Y')) { ev.preventDefault(); redo(); return; }
     if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
-    if (ev.key === 'Delete' || ev.key === 'Backspace') { deleteSelected(); renderSide(); draw(); }
+    if (ev.key === 'Delete' || ev.key === 'Backspace') { commit(() => deleteSelected()); renderSide(); draw(); }
     if (ev.key === 'Escape') { S.pipeStart = null; rectDraft = null; draw(); }
   });
 
@@ -990,6 +1005,7 @@
       const typed = ['range', 'number', 'text', 'color'].includes(el.type);
       const ev = (el.tagName === 'SELECT' || typed) ? 'input' : 'click';
       el.addEventListener(ev, () => {
+        const before = docSnapshot();
         const n = S.selected ? nodeById(S.selected.id) : null;
         const p = S.selected && S.selected.kind === 'pipe' ? S.pipes.find(x => x.id === S.selected.id) : null;
         const s = S.selected && S.selected.kind === 'shape' ? shapeById(S.selected.id) : null;
@@ -1032,12 +1048,17 @@
           case 'shapeW': if (s) s.w = Math.max(0.1, +el.value); break;
           case 'shapeH': if (s) s.h = Math.max(0.1, +el.value); break;
         }
+        // typed fields (number/range/text/colour) coalesce a burst into one
+        // undo step; selects & buttons are discrete (key = null).
+        record(before, typed ? act : null);
         save();
         if (act === 'del' || act === 'sub' || act === 'valve' || act === 'boreState' || act === 'shapeColor') renderSide();
         else if (act === 'rot') updateRotUI(n ? (n.rot || 0) : 0);
         else if (S.tab === 'results') renderSide();
         draw();
       });
+      // committing a typed value (blur / Enter) ends its coalescing burst
+      if (typed) el.addEventListener('change', () => { coalesceKey = null; });
     });
   }
 
@@ -1060,6 +1081,70 @@
   function updateSimButtons() {
     const stop = document.getElementById('stopBtn');
     if (stop) stop.disabled = !S.simActive;
+  }
+
+  // ---------- undo / redo history ----------
+  // Snapshot-based: each stack entry is the serialized document (yard / nodes /
+  // pipes / shapes / params / nextId — the same fields Export writes). We push
+  // the *pre-change* state so Ctrl+Z restores it. A run of continuous edits
+  // (typing in a field, dragging a slider or a node) collapses into one step,
+  // and an action that changes nothing adds nothing.
+  const UNDO_LIMIT = 200;
+  let undoStack = [], redoStack = [], coalesceKey = null;
+
+  function docSnapshot() {
+    return JSON.stringify({
+      yard: S.yard, nodes: S.nodes, pipes: S.pipes,
+      shapes: S.shapes, params: S.params, nextId: S.nextId,
+    });
+  }
+  function restoreDoc(str) {
+    const d = JSON.parse(str);
+    S.yard = d.yard; S.nodes = d.nodes; S.pipes = d.pipes;
+    S.shapes = d.shapes; S.params = d.params; S.nextId = d.nextId;
+    S.sim = null;                                   // design changed — results are stale
+    // drop a selection that no longer points at anything
+    if (S.selected) {
+      const live = S.selected.kind === 'node' ? !!nodeById(S.selected.id)
+        : S.selected.kind === 'pipe' ? S.pipes.some(p => p.id === S.selected.id)
+        : !!shapeById(S.selected.id);
+      if (!live) S.selected = null;
+    }
+  }
+  // Record `before` as an undo checkpoint if the document actually changed.
+  // `key` (optional) coalesces a run of edits sharing the same key into one step.
+  function record(before, key) {
+    if (before === docSnapshot()) return;           // no-op — nothing to undo
+    if (key != null && key === coalesceKey) return; // still mid-burst
+    undoStack.push(before);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack = [];
+    coalesceKey = (key != null) ? key : null;
+    updateUndoButtons();
+  }
+  // Run a discrete mutation and checkpoint it (only if it changed anything).
+  function commit(fn) { const b = docSnapshot(); fn(); record(b); }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(docSnapshot());
+    restoreDoc(undoStack.pop());
+    afterHistory();
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(docSnapshot());
+    restoreDoc(redoStack.pop());
+    afterHistory();
+  }
+  function afterHistory() {
+    coalesceKey = null; S.pipeStart = null; rectDraft = null;
+    updateSimButtons(); updateUndoButtons(); renderSide(); draw(); save();
+  }
+  function updateUndoButtons() {
+    const u = document.getElementById('undoBtn'), r = document.getElementById('redoBtn');
+    if (u) u.disabled = !undoStack.length;
+    if (r) r.disabled = !redoStack.length;
   }
 
   // ---------- persistence ----------
@@ -1286,8 +1371,12 @@
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
   document.getElementById('pipeSize').addEventListener('change', e => { S.pipeSize = +e.target.value; });
-  document.getElementById('yw').addEventListener('input', e => { S.yard.w = Math.max(1, +e.target.value); fitView(); draw(); save(); });
-  document.getElementById('yh').addEventListener('input', e => { S.yard.h = Math.max(1, +e.target.value); fitView(); draw(); save(); });
+  document.getElementById('yw').addEventListener('input', e => { const b = docSnapshot(); S.yard.w = Math.max(1, +e.target.value); fitView(); draw(); save(); record(b, 'yard'); });
+  document.getElementById('yh').addEventListener('input', e => { const b = docSnapshot(); S.yard.h = Math.max(1, +e.target.value); fitView(); draw(); save(); record(b, 'yard'); });
+  document.getElementById('yw').addEventListener('change', () => { coalesceKey = null; });
+  document.getElementById('yh').addEventListener('change', () => { coalesceKey = null; });
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
   document.getElementById('simBtn').addEventListener('click', simulateNow);
   document.getElementById('stopBtn').addEventListener('click', stopSim);
   document.getElementById('fitBtn').addEventListener('click', () => { fitView(); draw(); });
@@ -1296,7 +1385,10 @@
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', e => { if (e.target.files[0]) importJSON(e.target.files[0]); });
   document.getElementById('clearBtn').addEventListener('click', () => {
-    if (confirm('Clear the whole layout?')) { S.nodes = []; S.pipes = []; S.shapes = []; S.sim = null; S.simActive = false; S.selected = null; updateSimButtons(); renderSide(); draw(); save(); }
+    if (confirm('Clear the whole layout?')) {
+      commit(() => { S.nodes = []; S.pipes = []; S.shapes = []; });
+      S.sim = null; S.simActive = false; S.selected = null; updateSimButtons(); renderSide(); draw(); save();
+    }
   });
 
   // ---------- init ----------
@@ -1313,6 +1405,7 @@
     resize();
     setTool('select');
     updateSimButtons();
+    updateUndoButtons();
     renderSide();
   }
   window.addEventListener('resize', resize);

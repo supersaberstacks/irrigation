@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backyard Irrigation Designer</title>
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <!-- ===== Top bar ===== -->
@@ -24,6 +24,8 @@
     </div>
     <button id="fitBtn" title="Fit yard to view">Fit</button>
     <div class="spacer"></div>
+    <button id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+    <button id="redoBtn" title="Redo (Ctrl+Shift+Z)" disabled>↷ Redo</button>
     <button id="importBtn">Import</button>
     <input id="importFile" type="file" accept="application/json" style="display:none">
     <button id="exportBtn">Export</button>
@@ -79,7 +81,7 @@
 
   <!-- bump ?v= whenever sim.js/app.js/styles.css change, so browsers fetch
        the new file instead of a stale cached copy (GitHub Pages caches assets). -->
-  <script src="sim.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="sim.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
