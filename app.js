@@ -4,20 +4,21 @@
 (function () {
   const SIM = window.IrrigationSim;
   const GRID = 0.1;                         // metres
-  const PIPE_W = { 40: 6, 30: 4, 20: 2.5 }; // line weight by size
+  const PIPE_W = { 40: 6, 32: 4.5, 25: 3.2, 20: 2.5 }; // line weight by size
+  const PIPE_SIZES = [40, 32, 25, 20];      // selectable pipe diameters (mm)
   // preset fills for areas (garden bed, soil/shed, concrete, water, other)
   const SHAPE_COLORS = ['#3fae5a', '#9c6b3f', '#7d8893', '#3f7dae', '#b04a8f'];
 
   const S = {
     yard: { w: 15, h: 20 },
-    nodes: [],   // {id,x,y,type:'bore'|'sprinkler'|'junction'|'valve'|'blocker', sub, rot, hp, depth, closed}
+    nodes: [],   // {id,x,y,type:'bore'|'sprinkler'|'junction'|'valve'|'blocker', sub, rot, hp, depth, closed, decommissioned}
     pipes: [],   // {id,a,b,size}
     shapes: [],  // {id,x,y,w,h,label,color} — garden beds / sheds / zones
     params: { eff: 0.5, ratedP: 200, hazenC: 150 },
     nextId: 1,
     view: { scale: 60, ox: 40, oy: 40 },
     tool: 'select',
-    pipeSize: 30,
+    pipeSize: 25,
     selected: null,        // {kind:'node'|'pipe', id}
     pipeStart: null,       // world point while drawing
     mouse: null,           // world point
@@ -190,12 +191,13 @@
   function placeComponent(world, type, sub) {
     const n = getOrCreateNode(world); // reuses a node, or splits a pipe, or makes one
     if (type === 'bore') {
-      const other = S.nodes.find(x => x.type === 'bore' && x.id !== n.id);
-      if (other) other.type = 'junction';
+      // Only one active bore at a time — retire any other active bore to a
+      // decommissioned marker rather than destroying it, so its spot is kept.
+      S.nodes.forEach(x => { if (x.type === 'bore' && x.id !== n.id && !x.decommissioned) x.decommissioned = true; });
     }
     n.type = type;
     if (type === 'sprinkler') { n.sub = sub; if (n.rot == null) n.rot = 0; }
-    if (type === 'bore') { if (n.hp == null) n.hp = 2.5; if (n.depth == null) n.depth = 6; }
+    if (type === 'bore') { if (n.hp == null) n.hp = 2.5; if (n.depth == null) n.depth = 6; n.decommissioned = false; }
     if (type === 'valve') { if (n.closed == null) n.closed = false; }
     S.selected = { kind: 'node', id: n.id };
     S.sim = null;
@@ -457,9 +459,18 @@
     const sim = S.simActive ? S.sim : null;
     ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
     if (n.type === 'bore') {
-      ctx.fillStyle = '#1971c2';
-      ctx.beginPath(); ctx.rect(c.x - 9, c.y - 9, 18, 18); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.fillText('B', c.x, c.y + 0.5);
+      if (n.decommissioned) {
+        // muted, dashed, hollow square — an old bore kept only as a marker
+        ctx.fillStyle = '#243139';
+        ctx.beginPath(); ctx.rect(c.x - 9, c.y - 9, 18, 18); ctx.fill();
+        ctx.strokeStyle = '#6d7d8c'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 2]);
+        ctx.strokeRect(c.x - 9, c.y - 9, 18, 18); ctx.setLineDash([]);
+        ctx.fillStyle = '#8b98a5'; ctx.font = 'bold 10px system-ui'; ctx.fillText('B', c.x, c.y + 0.5);
+      } else {
+        ctx.fillStyle = '#1971c2';
+        ctx.beginPath(); ctx.rect(c.x - 9, c.y - 9, 18, 18); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.fillText('B', c.x, c.y + 0.5);
+      }
     } else if (n.type === 'sprinkler') {
       const r = sim && sim.sprinklers[n.id]
         ? ({ ok: '#2f9e44', low: '#e8a33d', bad: '#e03131' }[sim.sprinklers[n.id].status])
@@ -789,7 +800,7 @@
         <h3>Pipe</h3>
         <div class="prop"><label>Diameter</label>
           <select data-act="pipeSize">
-            ${[40, 30, 20].map(s => `<option value="${s}" ${s == p.size ? 'selected' : ''}>${s} mm</option>`).join('')}
+            ${PIPE_SIZES.map(s => `<option value="${s}" ${s == p.size ? 'selected' : ''}>${s} mm</option>`).join('')}
           </select></div>
         <div class="kv"><span>Length</span><span>${len.toFixed(2)} m</span></div>
         ${sim ? `<div class="kv"><span>Flow</span><span>${sim.flow.toFixed(1)} L/min</span></div>
@@ -820,8 +831,15 @@
     const n = nodeById(S.selected.id);
     if (!n) return '<p class="empty">—</p>';
     if (n.type === 'bore') {
+      const dead = !!n.decommissioned;
       return `
         <h3>Bore / pump</h3>
+        <div class="prop"><label>Status</label>
+          <select data-act="boreState">
+            <option value="active" ${dead ? '' : 'selected'}>Active — supplies water</option>
+            <option value="decommissioned" ${dead ? 'selected' : ''}>Decommissioned — old bore, kept as a marker</option>
+          </select></div>
+        ${dead ? `<p class="empty" style="margin:4px 0 8px">This bore is inactive: its location is kept for reference, but it supplies no water and the simulation ignores it.</p>` : ''}
         <div class="prop"><label>Power (HP)</label>
           <input type="number" step="0.25" min="0.25" value="${n.hp}" data-act="hp"></div>
         <div class="prop"><label>Depth underground (m)</label>
@@ -900,7 +918,7 @@
     if (!r) return '<p class="empty">Press ▶ Simulate to solve the network and see per-head flows here. ■ Stop clears the results.</p>';
     let html = '';
     if (r.warnings.length) {
-      const err = r.warnings.some(w => /not reached|No bore|under-supplied/.test(w));
+      const err = r.warnings.some(w => /not reached|No bore|decommissioned|under-supplied/.test(w));
       html += `<div class="warnbox ${err ? 'err' : ''}"><b>Notes</b><ul>${r.warnings.map(w => `<li>${w}</li>`).join('')}</ul></div>`;
     }
     if (!r.ok) return html || '<p class="empty">Add a bore and sprinklers, then results appear here.</p>';
@@ -922,8 +940,9 @@
   function renderBOM() {
     const sprCount = { '360': 0, '270': 0, '180': 0, '90': 0 };
     S.nodes.filter(n => n.type === 'sprinkler').forEach(n => sprCount[n.sub]++);
-    const pipeLen = { 40: 0, 30: 0, 20: 0 };
-    S.pipes.forEach(p => { pipeLen[p.size] += dist(nodeById(p.a), nodeById(p.b)); });
+    const pipeLen = {};
+    PIPE_SIZES.forEach(s => (pipeLen[s] = 0));
+    S.pipes.forEach(p => { pipeLen[p.size] = (pipeLen[p.size] || 0) + dist(nodeById(p.a), nodeById(p.b)); });
     const fits = {};
     S.nodes.filter(n => n.type === 'junction').forEach(n => {
       const f = fittingFor(n);
@@ -940,8 +959,10 @@
     if (valveCount) { any = true; rows += `<tr><td>Valve</td><td>${valveCount}</td></tr>`; }
     const blockerCount = S.nodes.filter(n => n.type === 'blocker').length;
     if (blockerCount) { any = true; rows += `<tr><td>Blocker / capped riser</td><td>${blockerCount}</td></tr>`; }
-    const bore = S.nodes.find(n => n.type === 'bore');
+    const bore = S.nodes.find(n => n.type === 'bore' && !n.decommissioned);
     if (bore) { any = true; rows += `<tr><td>Bore pump (${bore.hp} HP, ${bore.depth} m)</td><td>1</td></tr>`; }
+    const deadBores = S.nodes.filter(n => n.type === 'bore' && n.decommissioned).length;
+    if (deadBores) { any = true; rows += `<tr><td>Decommissioned bore (marker only)</td><td>${deadBores}</td></tr>`; }
     if (!any) return '<p class="empty">Draw your layout to generate a parts list.</p>';
     return `<h3>Parts list</h3><table class="bom">${rows}</table>`;
   }
@@ -989,6 +1010,16 @@
             }
             break;
           case 'valve': if (n) { n.closed = el.value === 'closed'; S.sim = null; } break;
+          case 'boreState':
+            if (n) {
+              const dead = el.value === 'decommissioned';
+              n.decommissioned = dead;
+              // reactivating a bore retires any other active bore, keeping the
+              // single-active-bore rule (and preserving the other as a marker)
+              if (!dead) S.nodes.forEach(x => { if (x.type === 'bore' && x.id !== n.id && !x.decommissioned) x.decommissioned = true; });
+              S.sim = null;
+            }
+            break;
           case 'rot': if (n) n.rot = +el.value; break;
           case 'eff': S.params.eff = +el.value; S.sim = null; break;
           case 'ratedP': S.params.ratedP = +el.value; S.sim = null; break;
@@ -1002,7 +1033,7 @@
           case 'shapeH': if (s) s.h = Math.max(0.1, +el.value); break;
         }
         save();
-        if (act === 'del' || act === 'sub' || act === 'valve' || act === 'shapeColor') renderSide();
+        if (act === 'del' || act === 'sub' || act === 'valve' || act === 'boreState' || act === 'shapeColor') renderSide();
         else if (act === 'rot') updateRotUI(n ? (n.rot || 0) : 0);
         else if (S.tab === 'results') renderSide();
         draw();
@@ -1033,6 +1064,11 @@
 
   // ---------- persistence ----------
   const KEY = 'irrigationDesign_v1';
+  // Older layouts offered 30 mm pipe, which isn't a real poly size. Remap any
+  // legacy 30 mm run to the nearest stocked size (32 mm) on load / import.
+  function migrate() {
+    S.pipes.forEach(p => { if (p.size === 30) p.size = 32; });
+  }
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify({
@@ -1046,6 +1082,7 @@
       if (!raw) return false;
       const d = JSON.parse(raw);
       Object.assign(S, { yard: d.yard, nodes: d.nodes, pipes: d.pipes, shapes: d.shapes || [], params: d.params, nextId: d.nextId || 1 });
+      migrate();
       return true;
     } catch (e) { return false; }
   }
@@ -1060,6 +1097,7 @@
       try {
         const d = JSON.parse(fr.result);
         S.yard = d.yard || S.yard; S.nodes = d.nodes || []; S.pipes = d.pipes || []; S.shapes = d.shapes || [];
+        migrate();
         S.params = Object.assign(S.params, d.params || {});
         S.nextId = 1 + S.nodes.concat(S.pipes, S.shapes).reduce((m, x) => Math.max(m, +(String(x.id).replace('n', '')) || 0), 0);
         S.sim = null; S.simActive = false; S.selected = null; updateSimButtons(); fitView(); renderSide(); draw(); save();
@@ -1152,9 +1190,14 @@
     g.textAlign = 'center'; g.textBaseline = 'middle';
     if (n.type === 'bore') {
       const r = Math.max(7, parseFloat(fs(0.16)) * 0.95);
-      g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.6;
-      g.beginPath(); g.rect(c.x - r, c.y - r, r * 2, r * 2); g.fill(); g.stroke();
-      g.fillStyle = '#000'; g.font = 'bold ' + fs(0.2); g.fillText('B', c.x, c.y + 0.5);
+      g.fillStyle = '#fff'; g.strokeStyle = n.decommissioned ? '#888' : '#000'; g.lineWidth = n.decommissioned ? 1.4 : 1.6;
+      if (n.decommissioned) g.setLineDash([4, 3]);
+      g.beginPath(); g.rect(c.x - r, c.y - r, r * 2, r * 2); g.fill(); g.stroke(); g.setLineDash([]);
+      g.fillStyle = n.decommissioned ? '#888' : '#000'; g.font = 'bold ' + fs(0.2); g.fillText('B', c.x, c.y + 0.5);
+      if (n.decommissioned) {
+        const txt = 'old (off)', ly = c.y + r + Math.max(8, parseFloat(fs(0.13)));
+        g.font = fs(0.11); g.fillStyle = '#888'; g.fillText(txt, c.x, ly);
+      }
     } else if (n.type === 'sprinkler') {
       const r = Math.max(5, parseFloat(fs(0.12)) * 0.95);
       g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.4;
@@ -1214,6 +1257,7 @@
       <img class="print-plan" src="${img}" alt="Irrigation layout">
       <div class="print-legend">
         <span><b>&#9633; B</b> Bore / pump</span>
+        <span><b>&#9633; B</b> (dashed) Decommissioned bore</span>
         <span>&#9711; Sprinkler (label = type)</span>
         <span>&#8904; V Valve (filled = closed)</span>
         <span>&#8856; Blocker (capped head spot)</span>

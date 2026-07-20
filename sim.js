@@ -27,7 +27,7 @@
   };
 
   // Pipe nominal diameters (m). Treated as internal bore for friction.
-  const PIPE_DIAM = { 40: 0.040, 30: 0.030, 20: 0.020 };
+  const PIPE_DIAM = { 40: 0.040, 32: 0.032, 25: 0.025, 20: 0.020 };
 
   // Hazen-Williams head loss (m) for flow Q (m^3/s) over length L (m).
   function headLoss(Q, L, d, C) {
@@ -57,8 +57,16 @@
       warnings,
     };
 
-    const bore = nodes.find(n => n.type === 'bore');
-    if (!bore) { warnings.push('No bore placed — add a bore to run the simulation.'); return result; }
+    // Only an active bore supplies water; decommissioned bores are location
+    // markers for old, disused bores and are ignored as a source.
+    const bore = nodes.find(n => n.type === 'bore' && !n.decommissioned);
+    if (!bore) {
+      const anyBore = nodes.some(n => n.type === 'bore');
+      warnings.push(anyBore
+        ? 'The only bore is decommissioned — mark a bore active, or add one, to run the simulation.'
+        : 'No bore placed — add a bore to run the simulation.');
+      return result;
+    }
     const sprinklers = nodes.filter(n => n.type === 'sprinkler');
     if (!sprinklers.length) { warnings.push('No sprinklers placed yet.'); return result; }
 

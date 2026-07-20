@@ -22,9 +22,13 @@ Open `index.html` in any modern browser. That's it.
 
 1. **Set the yard size** (top bar) — width × height in metres.
 2. **Place a bore** (`■` tool) — this is your pump/water source. Select it to set
-   its horsepower and depth (how far it has to lift water).
+   its horsepower and depth (how far it has to lift water). Set its **Status** to
+   *Decommissioned* to keep an old bore's location on the plan as a greyed-out
+   marker — it supplies no water and the simulation ignores it. Only one bore is
+   active at a time; placing or activating another retires the previous one to a
+   decommissioned marker.
 3. **Draw pipe** (`━` tool) — click point-to-point. Click on an existing pipe to
-   tee into it; `Esc` or right-click ends a run. Choose 40/30/20 mm in the top bar.
+   tee into it; `Esc` or right-click ends a run. Choose 40/32/25/20 mm in the top bar.
 4. **Add sprinklers** — `◉` 360°, `◕` 270°, `◐` 180°, `◔` 90°. Rotate a directional head with its aim handle.
 5. **Add valves** (`⋈` tool) — an inline valve you can set **Open** or **Closed** in the inspector.
    A closed valve stops flow to everything downstream of it, so you can model zones / shut-offs.
@@ -89,17 +93,19 @@ reused independently of the editor.
 {
   "yard":   { "w": 15, "h": 20 },
   "nodes":  [ { "id": "n1", "x": 5, "y": 5, "type": "bore", "hp": 2.5, "depth": 6 } ],
-  "pipes":  [ { "id": "n3", "a": "n1", "b": "n2", "size": 30 } ],
+  "pipes":  [ { "id": "n3", "a": "n1", "b": "n2", "size": 25 } ],
   "shapes": [ { "id": "s1", "x": 1, "y": 1, "w": 4, "h": 3, "label": "Bed", "color": "#3fae5a" } ],
   "params": { "eff": 0.5, "ratedP": 200, "hazenC": 150 }
 }
 ```
 
 Coordinates are in metres. A node's `type` is one of `bore`, `sprinkler`,
-`junction`, `valve`, or `blocker`. Sprinklers carry a `sub` (`"360"` / `"270"` /
-`"180"` / `"90"`) and a `rot` (facing, degrees); valves carry `closed`
-(`true`/`false`); blockers carry no extra fields. The same object is what gets
-auto-saved to `localStorage`.
+`junction`, `valve`, or `blocker`. Bores carry `hp`, `depth`, and an optional
+`decommissioned` (`true`/`false`, default active). Sprinklers carry a `sub`
+(`"360"` / `"270"` / `"180"` / `"90"`) and a `rot` (facing, degrees); valves
+carry `closed` (`true`/`false`); blockers carry no extra fields. Pipe `size` is
+one of `40` / `32` / `25` / `20` (mm). The same object is what gets auto-saved
+to `localStorage`.
 
 ## Notes & limitations
 
