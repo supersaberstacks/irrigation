@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backyard Irrigation Designer</title>
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
   <!-- ===== Top bar ===== -->
@@ -60,7 +60,9 @@
     <!-- canvas -->
     <div class="canvas-wrap">
       <canvas id="cv"></canvas>
-      <div class="hint">Pipe: click point-to-point (Esc / right-click to stop). Area: drag to draw a bed or shed. Wheel = zoom, Shift/right-drag = pan. Delete removes selected.</div>
+      <div class="hint hint-mouse">Pipe: click point-to-point (Esc / right-click to stop). Area: drag to draw a bed or shed. Wheel = zoom, Shift/right-drag = pan. Delete removes selected.</div>
+      <div class="hint hint-touch">Tap to place. Pipe: tap point to point, then Finish. Drag empty ground to move around; pinch to zoom.</div>
+      <button id="finishRunBtn" class="float-btn" hidden>✓ Finish pipe run</button>
       <div class="coords" id="coords"></div>
     </div>
 
@@ -81,7 +83,7 @@
 
   <!-- bump ?v= whenever sim.js/app.js/styles.css change, so browsers fetch
        the new file instead of a stale cached copy (GitHub Pages caches assets). -->
-  <script src="sim.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="sim.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

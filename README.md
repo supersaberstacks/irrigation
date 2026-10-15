@@ -53,6 +53,18 @@ The side panel has four tabs:
 - **Parts** — an auto-generated bill of materials (pipe lengths, head counts, bore).
 - **Settings** — pump efficiency, sprinkler rated pressure, pipe roughness (Hazen C).
 
+## On a phone or tablet
+
+It works by touch too. On a narrow screen the tools sit in a row across the top, the plan in the middle and the
+details panel underneath.
+
+- **Tap** to place a bore, sprinkler, valve or blocker, or to select something (its details and Delete button
+  appear in the panel underneath).
+- **Pipe:** tap point to point, then tap **✓ Finish pipe run** (bottom right) to end the run.
+- **Area:** drag a finger to draw it.
+- **Move around:** drag a finger on empty ground (with the Select tool), or use the Pan tool.
+- **Zoom:** pinch with two fingers. A pinch never places anything.
+
 ## How the simulation works
 
 The hydraulics live in [`sim.js`](sim.js) (`window.IrrigationSim.simulate`). In short:
