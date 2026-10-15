@@ -1,7 +1,5 @@
 # Irrigation Designer
 
-**▶ [Live demo](https://supersaberstacks.github.io/irrigation/)**
-
 A browser-based tool for designing a backyard irrigation layout and checking
 whether it will actually work — before you dig. Draw your yard, lay pipe from a
 bore (pump), drop in sprinkler heads, then run a hydraulic simulation that tells
@@ -10,13 +8,7 @@ you how much water each head really gets at the pressure your pump can deliver.
 No build step, no dependencies, no server. It's plain HTML + CSS + vanilla
 JavaScript running on a `<canvas>`.
 
-## Running it
-
-Open `index.html` in any modern browser. That's it.
-
-> Tip: because everything is client-side, you can also just double-click
-> `index.html`. Your work auto-saves to the browser's `localStorage`, so it's
-> still there when you reopen the page.
+**Where it lives:** <https://supersaberstacks.github.io/irrigation/> (GitHub Pages; not in a container).
 
 ## Using it
 
@@ -53,7 +45,7 @@ The side panel has four tabs:
 - **Parts** — an auto-generated bill of materials (pipe lengths, head counts, bore).
 - **Settings** — pump efficiency, sprinkler rated pressure, pipe roughness (Hazen C).
 
-## On a phone or tablet
+### On a phone or tablet
 
 It works by touch too. On a narrow screen the tools sit in a row across the top, the plan in the middle and the
 details panel underneath.
@@ -65,7 +57,27 @@ details panel underneath.
 - **Move around:** drag a finger on empty ground (with the Select tool), or use the Pan tool.
 - **Zoom:** pinch with two fingers. A pinch never places anything.
 
-## How the simulation works
+## Setting it up
+
+Open `index.html` in any modern browser. That's it.
+
+> Tip: because everything is client-side, you can also just double-click
+> `index.html`. Your work auto-saves to the browser's `localStorage`, so it's
+> still there when you reopen the page.
+
+## Development
+
+| File | Role |
+|------|------|
+| [`index.html`](index.html) | Page shell — top bar, tool rail, canvas, side panel. |
+| [`styles.css`](styles.css) | All styling. |
+| [`sim.js`](sim.js) | Pure hydraulic model — no DOM. Exposes `window.IrrigationSim`. |
+| [`app.js`](app.js) | Everything interactive: drawing, editing, rendering, BOM, save/load. |
+
+`sim.js` deliberately has no DOM dependencies, so the model can be tested or
+reused independently of the editor.
+
+### How the simulation works
 
 The hydraulics live in [`sim.js`](sim.js) (`window.IrrigationSim.simulate`). In short:
 
@@ -86,19 +98,7 @@ Heads are rated **ok / low / bad** by how close actual flow is to rated flow
 (≥85% ok, ≥55% low, otherwise bad). Warnings call out disconnected heads,
 loops, over-fast pipes, starved heads, and an oversized bore.
 
-## Project layout
-
-| File | Role |
-|------|------|
-| [`index.html`](index.html) | Page shell — top bar, tool rail, canvas, side panel. |
-| [`styles.css`](styles.css) | All styling. |
-| [`sim.js`](sim.js) | Pure hydraulic model — no DOM. Exposes `window.IrrigationSim`. |
-| [`app.js`](app.js) | Everything interactive: drawing, editing, rendering, BOM, save/load. |
-
-`sim.js` deliberately has no DOM dependencies, so the model can be tested or
-reused independently of the editor.
-
-## Save / load format
+### Save / load format
 
 **Export** writes a JSON file; **Import** reads one back. The shape is:
 
@@ -120,7 +120,7 @@ carry `closed` (`true`/`false`); blockers carry no extra fields. Pipe `size` is
 one of `40` / `32` / `25` / `20` (mm). The same object is what gets auto-saved
 to `localStorage`.
 
-## Notes & limitations
+## Notes and limits
 
 - All flows are simulated as a **tree**; redundant (looping) pipes are ignored for
   flow distribution.
