@@ -19,6 +19,7 @@ body {
   display: grid;
   grid-template-rows: auto 1fr;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -144,6 +145,41 @@ h3:first-child { margin-top: 0; }
 table.bom { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 table.bom td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
 table.bom td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- Touch screens and phones ---- */
+.float-btn {
+  position: absolute; right: 10px; bottom: 10px;
+  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  padding: 12px 16px; font-size: 0.95rem; border-radius: 10px;
+}
+.float-btn[hidden] { display: none; }
+.hint-touch { display: none; }
+@media (pointer: coarse) {
+  .hint-mouse { display: none; }
+  .hint-touch { display: block; }
+}
+@media (max-width: 760px) {
+  /* One column: top bar, tools, the drawing, then the panel underneath. */
+  .topbar { flex-wrap: nowrap; overflow-x: auto; gap: 8px; padding: 6px 10px; }
+  .topbar h1 { font-size: 0.9rem; margin-right: 2px; }
+  .topbar .spacer { display: none; }
+  .topbar button, .field input, .field select { min-height: 40px; flex: none; }
+  .field { flex: none; }
+  .main { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) minmax(0, 38%); }
+  .tools {
+    flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    border-right: none; border-bottom: 1px solid var(--line); padding: 6px 8px;
+  }
+  .tool { width: 50px; height: 50px; flex: none; font-size: 0.62rem; }
+  .tool-sep { width: 1px; height: 34px; margin: 0 2px; flex: none; }
+  .side { border-left: none; border-top: 1px solid var(--line); }
+  .tab { padding: 12px 4px; }
+  .panel-body button { min-height: 40px; }
+  /* 16px stops phones zooming in when a field is tapped */
+  .field input, .field select, .prop input, .prop select { font-size: 16px; min-height: 40px; }
+  .hint { max-width: calc(100% - 20px); }
+  .coords { display: none; }
+}
 
 /* ---- Print-friendly plan ----
    Hidden on screen; in print it replaces the dark app UI with a white-

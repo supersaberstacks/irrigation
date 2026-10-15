@@ -263,6 +263,9 @@
   }
 
   function draw() {
+    // the Finish button ends a pipe run on a touch screen (Esc or right-click does it with a keyboard and mouse)
+    const fin = document.getElementById('finishRunBtn');
+    if (fin) fin.hidden = !(S.tool === 'pipe' && S.pipeStart);
     const rect = cv.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
 
@@ -568,11 +571,13 @@
     if (inp) { inp.value = deg; const lbl = inp.previousElementSibling; if (lbl) lbl.textContent = 'Facing (°): ' + deg; }
   }
 
-  cv.addEventListener('mousedown', ev => {
+  // A press on the canvas: from a mouse, a pen, or a finger (fingers are bigger, so they get more room).
+  function press(ev) {
     const rect = cv.getBoundingClientRect();
     const sx = ev.clientX - rect.left, sy = ev.clientY - rect.top;
     const world = toWorld(sx, sy);
-    const hitThresh = Math.max(GRID * 0.7, 10 / S.view.scale);
+    const finger = isTouch(ev);
+    const hitThresh = Math.max(GRID * 0.7, (finger ? 24 : 10) / S.view.scale);
     coalesceKey = null;        // touching the canvas ends any inspector edit burst
 
     // right-click cancels an in-progress pipe (same as Esc)
@@ -594,13 +599,13 @@
         const sn = nodeById(S.selected.id);
         if (sn && sn.type === 'sprinkler' && sn.sub !== '360') {
           const hp = aimHandlePos(sn);
-          if (Math.hypot(sx - hp.x, sy - hp.y) < 12) { dragBaseline = docSnapshot(); rotating = { id: sn.id }; return; }
+          if (Math.hypot(sx - hp.x, sy - hp.y) < (finger ? 26 : 12)) { dragBaseline = docSnapshot(); rotating = { id: sn.id }; return; }
         }
       }
       // resize handle of the selected area
       if (S.selected && S.selected.kind === 'shape') {
         const ss = shapeById(S.selected.id);
-        const k = ss && shapeHandleAt(ss, sx, sy, 9);
+        const k = ss && shapeHandleAt(ss, sx, sy, finger ? 20 : 9);
         if (k) {
           dragBaseline = docSnapshot();
           shapeResize = {
@@ -631,6 +636,8 @@
         return;
       }
       S.selected = null;
+      // a finger on empty ground moves the view
+      if (finger) panning = { sx, sy, ox: S.view.ox, oy: S.view.oy };
       renderSide(); draw();
       return;
     }
@@ -658,7 +665,7 @@
       else if (S.tool === 'erase') eraseAt(world, hitThresh);
     });
     renderSide(); draw();
-  });
+  }
 
   function eraseAt(world, thresh) {
     const n = nodeAt(world, thresh);
@@ -669,7 +676,7 @@
     if (s) { S.selected = { kind: 'shape', id: s.id }; deleteSelected(); }
   }
 
-  cv.addEventListener('mousemove', ev => {
+  function move(ev) {
     const rect = cv.getBoundingClientRect();
     const sx = ev.clientX - rect.left, sy = ev.clientY - rect.top;
     S.mouse = toWorld(sx, sy);
@@ -730,9 +737,10 @@
     }
     updateCoords();
     if (S.tool === 'pipe' || S.tool !== 'select') draw();
-  });
+  }
 
-  window.addEventListener('mouseup', () => {
+  // The end of a press: finish whatever it was dragging or drawing.
+  function release() {
     if (rectDraft) {
       const x = Math.min(rectDraft.x0, rectDraft.x1), y = Math.min(rectDraft.y0, rectDraft.y1);
       const w = Math.abs(rectDraft.x1 - rectDraft.x0), h = Math.abs(rectDraft.y1 - rectDraft.y0);
@@ -758,7 +766,69 @@
     // one undo step for the whole drag — only if it actually moved something
     if (dragBaseline != null) { record(dragBaseline); dragBaseline = null; }
     dragging = null; panning = null; rotating = null; shapeDrag = null; shapeResize = null;
+  }
+
+  // Pointer events cover a mouse, a pen and fingers. On a touch screen one finger taps, draws and drags;
+  // two fingers pinch to zoom and move the view.
+  const touches = new Map();   // pointerId -> {x, y} on the canvas, for each finger down
+  let pinch = null;            // the view and finger spread when the second finger landed
+  let tap = null;              // a finger press that acts when it lifts, unless it moves or a second finger lands
+  function isTouch(ev) { return ev.pointerType === 'touch' || ev.pointerType === 'pen'; }
+  function canvasPt(ev) { const r = cv.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+
+  cv.style.touchAction = 'none';
+  cv.addEventListener('pointerdown', ev => {
+    try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* not capturable: fine */ }
+    if (isTouch(ev)) {
+      const p = canvasPt(ev);
+      touches.set(ev.pointerId, p);
+      if (touches.size === 2) {
+        // a second finger: finish what the first one started, then pinch
+        tap = null; release();
+        const [a, b] = [...touches.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2,
+                  scale: S.view.scale, ox: S.view.ox, oy: S.view.oy };
+        return;
+      }
+      if (touches.size > 2) return;
+      // placing, erasing and pipe points happen when the finger lifts, so a pinch never drops a sprinkler
+      if (S.tool !== 'select' && S.tool !== 'rect' && S.tool !== 'pan') {
+        tap = { x: p.x, y: p.y, ev: { clientX: ev.clientX, clientY: ev.clientY, button: 0, shiftKey: false, pointerType: ev.pointerType } };
+        S.mouse = toWorld(p.x, p.y); draw();
+        return;
+      }
+    }
+    press(ev);
   });
+  cv.addEventListener('pointermove', ev => {
+    if (isTouch(ev) && touches.has(ev.pointerId)) {
+      const p = canvasPt(ev);
+      touches.set(ev.pointerId, p);
+      if (pinch) {
+        if (touches.size < 2) return;
+        const [a, b] = [...touches.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const scale = Math.max(8, Math.min(400, pinch.scale * d / pinch.d));
+        // keep the spot that was between the fingers under them
+        const wx = (pinch.mx - pinch.ox) / pinch.scale, wy = (pinch.my - pinch.oy) / pinch.scale;
+        S.view.scale = scale; S.view.ox = mx - wx * scale; S.view.oy = my - wy * scale;
+        draw(); return;
+      }
+      if (tap && Math.hypot(p.x - tap.x, p.y - tap.y) > 12) tap = null;
+    }
+    move(ev);
+  });
+  function lift(ev) {
+    if (isTouch(ev)) {
+      if (!touches.delete(ev.pointerId)) return;
+      if (pinch) { if (touches.size === 0) pinch = null; return; }
+      const t = tap; tap = null;
+      if (t && ev.type === 'pointerup') { press(t.ev); return; }
+    }
+    release();
+  }
+  window.addEventListener('pointerup', lift);
+  window.addEventListener('pointercancel', lift);
   cv.addEventListener('contextmenu', e => e.preventDefault());
 
   cv.addEventListener('wheel', ev => {
@@ -1380,6 +1450,7 @@
   document.getElementById('simBtn').addEventListener('click', simulateNow);
   document.getElementById('stopBtn').addEventListener('click', stopSim);
   document.getElementById('fitBtn').addEventListener('click', () => { fitView(); draw(); });
+  document.getElementById('finishRunBtn').addEventListener('click', () => { S.pipeStart = null; draw(); });
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
   document.getElementById('printBtn').addEventListener('click', printPlan);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
